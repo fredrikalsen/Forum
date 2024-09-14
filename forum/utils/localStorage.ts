@@ -41,7 +41,7 @@ export const saveThreadsToLocalStorage = (threads: Thread[]): void => {
   localStorage.setItem(THREADS_KEY, JSON.stringify(threads));
 };
 
-// Get threads from local storage
+// Get threads from local storage (with comment count and locked state)
 export const getThreadsFromLocalStorage = (): Thread[] => {
   const threads = localStorage.getItem(THREADS_KEY);
   const parsedThreads: Thread[] = threads ? JSON.parse(threads) : [];
@@ -58,6 +58,13 @@ export const getThreadsFromLocalStorage = (): Thread[] => {
 
 // Save a single comment to local storage
 export const saveCommentToLocalStorage = (comment: ThreadComment): void => {
+  const thread = getThreadFromLocalStorage(comment.thread);
+
+  // Check if the thread is locked before saving the comment
+  if (thread?.locked) {
+    throw new Error('This thread is locked. No comments can be added.');
+  }
+
   const comments = localStorage.getItem(COMMENTS_KEY);
   const allComments: ThreadComment[] = comments ? JSON.parse(comments) : [];
   allComments.push(comment);
@@ -71,34 +78,56 @@ export const getCommentsFromLocalStorage = (threadId: number): ThreadComment[] =
   return allComments.filter(comment => comment.thread === threadId);
 };
 
-// Get a specific thread from local storage
-export const getThreadFromLocalStorage = (threadId: number): QNAThread | null => {
+// Get a specific thread from local storage (with locked property)
+export const getThreadFromLocalStorage = (threadId: number): Thread | null => {
   const threads = localStorage.getItem(THREADS_KEY);
-  const allThreads: QNAThread[] = threads ? JSON.parse(threads) : [];
+  const allThreads: Thread[] = threads ? JSON.parse(threads) : [];
   return allThreads.find(thread => thread.id === threadId) || null;
 };
 
-// Save a specific thread to local storage
-export const saveThreadToLocalStorage = (updatedThread: QNAThread): void => {
+// Save a specific thread to local storage (including locked state)
+export const saveThreadToLocalStorage = (updatedThread: Thread): void => {
   const threads = localStorage.getItem(THREADS_KEY);
-  let allThreads: QNAThread[] = threads ? JSON.parse(threads) : [];
+  let allThreads: Thread[] = threads ? JSON.parse(threads) : [];
   allThreads = allThreads.map(thread =>
     thread.id === updatedThread.id ? updatedThread : thread
   );
   localStorage.setItem(THREADS_KEY, JSON.stringify(allThreads));
 };
 
-// Mark a comment as an answer
+// Toggle thread locked status
+export const toggleThreadLock = (threadId: number): void => {
+  const thread = getThreadFromLocalStorage(threadId);
+  if (thread) {
+    const updatedThread = { ...thread, locked: !thread.locked };
+    saveThreadToLocalStorage(updatedThread);
+  }
+};
+
+// Mark a comment as an answer (with locked thread check)
 export const markCommentAsAnswer = (threadId: number, commentId: number): void => {
+  const thread = getThreadFromLocalStorage(threadId);
+
+  // Check if the thread is locked before marking an answer
+  if (thread?.locked) {
+    throw new Error('This thread is locked. No changes can be made.');
+  }
+
   const comments = localStorage.getItem(COMMENTS_KEY);
   if (comments) {
     const allComments: ThreadComment[] = JSON.parse(comments);
-    // Set all comments in this thread to not be an answer
+    
+    // Check if the comment to be toggled is already marked as an answer
+    const commentIsAlreadyMarked = allComments.some(comment => comment.thread === threadId && comment.id === commentId && comment.isAnswer);
+    
+    // Toggle the isAnswer property
     const updatedComments = allComments.map(comment =>
       comment.thread === threadId
-        ? { ...comment, isAnswer: comment.id === commentId }
+        ? { ...comment, isAnswer: comment.id === commentId ? !commentIsAlreadyMarked : comment.isAnswer }
         : comment
     );
     localStorage.setItem(COMMENTS_KEY, JSON.stringify(updatedComments));
   }
 };
+
+
